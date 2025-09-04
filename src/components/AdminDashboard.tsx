@@ -7,7 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Download, Search, Filter, Users, FileText, Mail, TrendingUp } from "lucide-react";
+import { getLocalApplications, normalizeSupabaseApplication, updateLocalApplicationStatus, type LocalApplication } from "@/lib/localApplications";
+import { Download, Search, Filter, Users, FileText, Mail, TrendingUp, Database, HardDrive } from "lucide-react";
 import { format } from "date-fns";
 
 interface Application {
@@ -39,8 +40,8 @@ interface Stats {
 }
 
 export function AdminDashboard() {
-  const [applications, setApplications] = useState<Application[]>([]);
-  const [filteredApplications, setFilteredApplications] = useState<Application[]>([]);
+  const [applications, setApplications] = useState<LocalApplication[]>([]);
+  const [filteredApplications, setFilteredApplications] = useState<LocalApplication[]>([]);
   const [stats, setStats] = useState<Stats>({
     total: 0,
     submitted: 0,
@@ -68,22 +69,42 @@ export function AdminDashboard() {
   const fetchApplications = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("applications")
-        .select(`
-          *,
-          state:states(name),
-          lga:lgas(name),
-          position:positions(title)
-        `)
-        .order("created_at", { ascending: false });
+      // Get local applications first
+      const localApps = getLocalApplications();
+      
+      // Try to get Supabase applications
+      let supabaseApps: LocalApplication[] = [];
+      try {
+        const { data, error } = await supabase
+          .from("applications")
+          .select(`
+            *,
+            state:states(name),
+            lga:lgas(name),
+            position:positions(title)
+          `)
+          .order("created_at", { ascending: false });
 
-      if (error) {
-        throw error;
+        if (!error && data) {
+          supabaseApps = data.map(normalizeSupabaseApplication);
+        }
+      } catch (dbError) {
+        console.warn("Failed to fetch Supabase applications:", dbError);
       }
 
-      setApplications(data || []);
-      calculateStats(data || []);
+      // Combine both sources
+      const allApplications = [...localApps, ...supabaseApps];
+      
+      // Sort by created_at (most recent first)
+      allApplications.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
+      setApplications(allApplications);
+      calculateStats(allApplications);
+      
+      toast({
+        title: "Applications Loaded",
+        description: `Found ${localApps.length} local and ${supabaseApps.length} database applications`,
+      });
     } catch (error) {
       console.error("Error fetching applications:", error);
       toast({
@@ -110,7 +131,7 @@ export function AdminDashboard() {
     setPositions(data || []);
   };
 
-  const calculateStats = (data: Application[]) => {
+  const calculateStats = (data: LocalApplication[]) => {
     const stats = data.reduce((acc, app) => {
       acc.total++;
       acc[app.status as keyof Stats]++;
@@ -153,18 +174,33 @@ export function AdminDashboard() {
 
   const updateApplicationStatus = async (applicationId: string, newStatus: "submitted" | "under_review" | "shortlisted" | "rejected" | "hired") => {
     try {
-      const { error } = await supabase
-        .from("applications")
-        .update({ status: newStatus })
-        .eq("id", applicationId);
+      // Find the application to determine if it's local or Supabase
+      const application = applications.find(app => app.id === applicationId);
+      if (!application) {
+        throw new Error("Application not found");
+      }
 
-      if (error) {
-        throw error;
+      if (application.source === "local") {
+        // Update local application
+        const success = updateLocalApplicationStatus(applicationId, newStatus);
+        if (!success) {
+          throw new Error("Failed to update local application");
+        }
+      } else {
+        // Update Supabase application
+        const { error } = await supabase
+          .from("applications")
+          .update({ status: newStatus })
+          .eq("id", applicationId);
+
+        if (error) {
+          throw error;
+        }
       }
 
       toast({
         title: "Status Updated",
-        description: "Application status has been updated successfully",
+        description: `Application status updated to ${newStatus.replace("_", " ")}`,
       });
 
       fetchApplications(); // Refresh data
@@ -436,11 +472,20 @@ export function AdminDashboard() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>{application.position?.title}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <span>{application.position_title}</span>
+                        {application.source === "local" ? (
+                          <HardDrive className="h-3 w-3 text-orange-500" title="Local Application" />
+                        ) : (
+                          <Database className="h-3 w-3 text-blue-500" title="Database Application" />
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div>
-                        <div className="text-sm">{application.state?.name}</div>
-                        <div className="text-xs text-muted-foreground">{application.lga?.name}</div>
+                        <div className="text-sm">{application.state_name}</div>
+                        <div className="text-xs text-muted-foreground">{application.lga_name}</div>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -480,14 +525,20 @@ export function AdminDashboard() {
                       {format(new Date(application.created_at), "MMM dd, yyyy")}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => downloadCV(application.cv_file_path, application.full_name)}
-                      >
-                        <Download className="h-3 w-3 mr-1" />
-                        CV
-                      </Button>
+                      {application.source === "supabase" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => downloadCV(application.cv_file_name, application.full_name)}
+                        >
+                          <Download className="h-3 w-3 mr-1" />
+                          CV
+                        </Button>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          {application.cv_file_name}
+                        </Badge>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

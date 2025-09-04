@@ -62,7 +62,10 @@ const Admin = () => {
   }
 
   if (!user) {
-    return <AuthForm onAuthSuccess={() => setUser(user)} />;
+    return <AuthForm onAuthSuccess={() => {
+      // The user will be set by the auth state change listener
+      // No need to do anything here as the useEffect will handle it
+    }} />;
   }
 
   return (

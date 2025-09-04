@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { states as staticStates, getLgasByStateId, type LGA as StaticLGA, type State as StaticState } from "@/lib/stateLgaData";
+import { saveLocalApplication } from "@/lib/localApplications";
 import { Loader2, Upload, CheckCircle } from "lucide-react";
 
 const applicationSchema = z.object({
@@ -247,6 +248,22 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
         // Database submission failed, but we'll continue with offline mode
         console.warn("Database submission failed, using offline mode:", dbError);
         setApplicationNumber(applicationNumber);
+        
+        // Save to local storage for offline access
+        saveLocalApplication({
+          application_number: applicationNumber,
+          full_name: data.fullName,
+          email: data.email,
+          phone_number: data.phoneNumber,
+          state_name: states.find(s => s.id === data.stateId)?.name || "Unknown",
+          lga_name: lgas.find(l => l.id === data.lgaId)?.name || "Unknown",
+          date_of_birth: data.dateOfBirth,
+          educational_qualifications: data.educationalQualifications,
+          class_of_degree: data.classOfDegree || {},
+          position_title: positions.find(p => p.id === data.positionId)?.title || "Unknown",
+          cv_file_name: data.cvFile.name,
+          status: "submitted",
+        });
       }
 
       setIsSubmitted(true);
