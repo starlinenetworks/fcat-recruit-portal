@@ -97,6 +97,7 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
   }, []);
 
   useEffect(() => {
+    console.log("Selected State ID changed to:", selectedStateId);
     if (selectedStateId) {
       fetchLGAs(selectedStateId);
       form.setValue("lgaId", "");
@@ -104,6 +105,10 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
       setLgas([]);
     }
   }, [selectedStateId]);
+
+  useEffect(() => {
+    console.log("LGAs updated:", lgas);
+  }, [lgas]);
 
   const fetchStates = () => {
     // Use hardcoded states
