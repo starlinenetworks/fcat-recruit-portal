@@ -99,7 +99,6 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
   useEffect(() => {
     // Use getValues instead of watch to see if that fixes the issue
     const currentStateId = form.getValues("stateId");
-    console.log("Current State ID from getValues:", currentStateId);
     if (currentStateId) {
       fetchLGAs(currentStateId);
       form.setValue("lgaId", "");
@@ -109,7 +108,7 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
   }, [form.watch("stateId")]);
 
   useEffect(() => {
-    console.log("LGAs updated:", lgas);
+    // console.log("LGAs updated:", lgas); // Removed debug log
   }, [lgas]);
 
   const fetchStates = () => {
@@ -347,14 +346,8 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
                     <FormItem>
                       <FormLabel>State of Origin *</FormLabel>
                       <Select onValueChange={(value) => {
-                        console.log("State selected:", value);
-                        console.log("Form field value before:", field.value);
                         field.onChange(value);
-                        console.log("Form field value after:", field.value);
-                        // Also set the form value directly
                         form.setValue("stateId", value);
-                        console.log("Form setValue done, new value:", form.getValues("stateId"));
-                        console.log("All form values:", form.getValues());
                       }} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
