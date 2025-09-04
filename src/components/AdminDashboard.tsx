@@ -69,10 +69,7 @@ export function AdminDashboard() {
   const fetchApplications = async () => {
     setLoading(true);
     try {
-      // Get local applications first
-      const localApps = getLocalApplications();
-      
-      // Try to get Supabase applications
+      // Try to get Supabase applications first (primary source)
       let supabaseApps: LocalApplication[] = [];
       try {
         const { data, error } = await supabase
@@ -92,8 +89,11 @@ export function AdminDashboard() {
         console.warn("Failed to fetch Supabase applications:", dbError);
       }
 
-      // Combine both sources
-      const allApplications = [...localApps, ...supabaseApps];
+      // Get local applications as backup/additional source
+      const localApps = getLocalApplications();
+      
+      // Combine both sources, with Supabase as primary
+      const allApplications = [...supabaseApps, ...localApps];
       
       // Sort by created_at (most recent first)
       allApplications.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -101,10 +101,17 @@ export function AdminDashboard() {
       setApplications(allApplications);
       calculateStats(allApplications);
       
-      toast({
-        title: "Applications Loaded",
-        description: `Found ${localApps.length} local and ${supabaseApps.length} database applications`,
-      });
+      if (supabaseApps.length > 0 || localApps.length > 0) {
+        toast({
+          title: "Applications Loaded",
+          description: `Found ${supabaseApps.length} database and ${localApps.length} local applications`,
+        });
+      } else {
+        toast({
+          title: "No Applications",
+          description: "No applications found yet",
+        });
+      }
     } catch (error) {
       console.error("Error fetching applications:", error);
       toast({

@@ -11,7 +11,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { states as staticStates, getLgasByStateId, type LGA as StaticLGA, type State as StaticState } from "@/lib/stateLgaData";
 import { saveLocalApplication } from "@/lib/localApplications";
 import { Loader2, Upload, CheckCircle } from "lucide-react";
 
@@ -32,12 +31,21 @@ const applicationSchema = z.object({
 
 type ApplicationFormData = z.infer<typeof applicationSchema>;
 
-// Using static State and LGA types from local data
-
 interface Position {
   id: string;
   title: string;
   description?: string;
+}
+
+interface State {
+  id: string;
+  name: string;
+}
+
+interface LGA {
+  id: string;
+  name: string;
+  state_id: string;
 }
 
 const educationOptions = [
@@ -65,8 +73,8 @@ interface ApplicationFormProps {
 }
 
 export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}) {
-  const [states, setStates] = useState<StaticState[]>([]);
-  const [lgas, setLgas] = useState<StaticLGA[]>([]);
+  const [states, setStates] = useState<State[]>([]);
+  const [lgas, setLgas] = useState<LGA[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -112,15 +120,49 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
     // console.log("LGAs updated:", lgas); // Removed debug log
   }, [lgas]);
 
-  const fetchStates = () => {
-    // Use hardcoded states for offline use
-    setStates(staticStates);
+  const fetchStates = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("states")
+        .select("id, name")
+        .order("name");
+
+      if (error) {
+        throw error;
+      }
+
+      setStates(data || []);
+    } catch (error) {
+      console.error("Error loading states:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load states",
+        variant: "destructive",
+      });
+    }
   };
 
-  const fetchLGAs = (stateId: string) => {
-    // Use hardcoded LGAs for offline use
-    const hardcodedLgas = getLgasByStateId(stateId);
-    setLgas(hardcodedLgas);
+  const fetchLGAs = async (stateId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("lgas")
+        .select("id, name, state_id")
+        .eq("state_id", stateId)
+        .order("name");
+
+      if (error) {
+        throw error;
+      }
+
+      setLgas(data || []);
+    } catch (error) {
+      console.error("Error loading LGAs:", error);
+      toast({
+        title: "Error", 
+        description: "Failed to load LGAs",
+        variant: "destructive",
+      });
+    }
   };
 
   const fetchPositions = async () => {
@@ -205,9 +247,8 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
           full_name: data.fullName,
           email: data.email,
           phone_number: data.phoneNumber,
-          // Use dummy UUIDs if we can't access the database
-          state_id: data.stateId.length > 10 ? data.stateId : "00000000-0000-4000-8000-000000000001",
-          lga_id: data.lgaId.length > 10 ? data.lgaId : "00000000-0000-4000-8000-000000000002", 
+          state_id: data.stateId,
+          lga_id: data.lgaId, 
           date_of_birth: data.dateOfBirth,
           educational_qualifications: data.educationalQualifications as ("SSCE" | "ND" | "HND" | "BSC" | "MSC" | "PHD")[],
           class_of_degree: data.classOfDegree || {},
