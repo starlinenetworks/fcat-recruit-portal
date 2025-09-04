@@ -11,7 +11,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { states as staticStates, getLgasByStateId, type LGA as StaticLGA, type State as StaticState } from "@/lib/stateLgaData";
 import { Loader2, Upload, CheckCircle } from "lucide-react";
 
 const applicationSchema = z.object({
@@ -31,7 +30,16 @@ const applicationSchema = z.object({
 
 type ApplicationFormData = z.infer<typeof applicationSchema>;
 
-// Using static State and LGA types from local data
+interface State {
+  id: string;
+  name: string;
+}
+
+interface LGA {
+  id: string;
+  name: string;
+  state_id: string;
+}
 
 interface Position {
   id: string;
@@ -64,8 +72,8 @@ interface ApplicationFormProps {
 }
 
 export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}) {
-  const [states, setStates] = useState<StaticState[]>([]);
-  const [lgas, setLgas] = useState<StaticLGA[]>([]);
+  const [states, setStates] = useState<State[]>([]);
+  const [lgas, setLgas] = useState<LGA[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -130,71 +138,24 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
     setStates(data || []);
   };
 
-  const fetchLGAs = (stateId: string) => {
-    // Find the state name from the selected state ID
-    const selectedState = states.find(state => state.id === stateId);
-    if (!selectedState) {
-      setLgas([]);
+  const fetchLGAs = async (stateId: string) => {
+    // Fetch LGAs directly from the database
+    const { data, error } = await supabase
+      .from("lgas")
+      .select("id, name, state_id")
+      .eq("state_id", stateId)
+      .order("name");
+    
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load LGAs",
+        variant: "destructive",
+      });
       return;
     }
     
-    // Map state names to our hardcoded LGA data using numeric IDs
-    const stateNameToId: { [key: string]: string } = {
-      "Abia": "1",
-      "Adamawa": "2", 
-      "Akwa Ibom": "3",
-      "Anambra": "4",
-      "Bauchi": "5",
-      "Bayelsa": "6",
-      "Benue": "7",
-      "Borno": "8", 
-      "Cross River": "9",
-      "Delta": "10",
-      "Ebonyi": "11",
-      "Edo": "12",
-      "Ekiti": "13",
-      "Enugu": "14",
-      "Federal Capital Territory": "15",
-      "FCT": "15",
-      "Gombe": "16",
-      "Imo": "17",
-      "Jigawa": "18",
-      "Kaduna": "19",
-      "Kano": "20",
-      "Katsina": "21",
-      "Kebbi": "22",
-      "Kogi": "23",
-      "Kwara": "24",
-      "Lagos": "25",
-      "Nasarawa": "26",
-      "Niger": "27",
-      "Ogun": "28",
-      "Ondo": "29",
-      "Osun": "30",
-      "Oyo": "31",
-      "Plateau": "32",
-      "Rivers": "33",
-      "Sokoto": "34",
-      "Taraba": "35",
-      "Yobe": "36",
-      "Zamfara": "37"
-    };
-    
-    const mappedStateId = stateNameToId[selectedState.name];
-    if (!mappedStateId) {
-      setLgas([]);
-      return;
-    }
-    
-    // Get LGAs for this state and map them to use the real state UUID
-    const hardcodedLgas = getLgasByStateId(mappedStateId);
-    const mappedLgas = hardcodedLgas.map(lga => ({
-      ...lga,
-      state_id: stateId, // Use the real UUID from the database
-      id: `${stateId}-${lga.id}` // Create a unique ID combining state UUID and LGA sequence
-    }));
-    
-    setLgas(mappedLgas);
+    setLgas(data || []);
   };
 
   const fetchPositions = async () => {
@@ -241,46 +202,8 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
       // Generate application number
       const applicationNumber = `FCAT-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
 
-      // Find the selected LGA name for database insertion
-      const selectedLga = lgas.find(lga => lga.id === data.lgaId);
-      if (!selectedLga) {
-        throw new Error("Selected LGA not found");
-      }
-
-      // Create or find the LGA in the database
-      let lgaId = data.lgaId;
-      
-      // Check if this is one of our fake composite IDs (contains a dash)
-      if (data.lgaId.includes('-')) {
-        // This is a fake ID, we need to create/find the real LGA
-        const { data: existingLga, error: lgaFindError } = await supabase
-          .from("lgas")
-          .select("id")
-          .eq("name", selectedLga.name)
-          .eq("state_id", data.stateId)
-          .single();
-
-        if (existingLga) {
-          // LGA already exists, use its ID
-          lgaId = existingLga.id;
-        } else {
-          // Create new LGA
-          const { data: newLga, error: lgaCreateError } = await supabase
-            .from("lgas")
-            .insert({
-              name: selectedLga.name,
-              state_id: data.stateId
-            })
-            .select("id")
-            .single();
-
-          if (lgaCreateError) {
-            throw new Error(`Failed to create LGA: ${lgaCreateError.message}`);
-          }
-
-          lgaId = newLga.id;
-        }
-      }
+      // LGA ID is already a valid UUID from the database
+      const lgaId = data.lgaId;
 
       // Prepare application data
       const applicationData = {
