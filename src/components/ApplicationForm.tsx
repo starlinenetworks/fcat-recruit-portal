@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { states as staticStates, getLgasByStateId, type LGA as StaticLGA, type State as StaticState } from "@/lib/stateLgaData";
 import { Loader2, Upload, CheckCircle } from "lucide-react";
 
 const applicationSchema = z.object({
@@ -30,16 +31,7 @@ const applicationSchema = z.object({
 
 type ApplicationFormData = z.infer<typeof applicationSchema>;
 
-interface State {
-  id: string;
-  name: string;
-}
-
-interface LGA {
-  id: string;
-  name: string;
-  state_id: string;
-}
+// Using static State and LGA types from local data
 
 interface Position {
   id: string;
@@ -72,8 +64,8 @@ interface ApplicationFormProps {
 }
 
 export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}) {
-  const [states, setStates] = useState<State[]>([]);
-  const [lgas, setLgas] = useState<LGA[]>([]);
+  const [states, setStates] = useState<StaticState[]>([]);
+  const [lgas, setLgas] = useState<StaticLGA[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -106,53 +98,22 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
 
   useEffect(() => {
     if (selectedStateId) {
-      console.log('State changed to:', selectedStateId);
       fetchLGAs(selectedStateId);
       form.setValue("lgaId", "");
     } else {
-      console.log('No state selected, clearing LGAs');
       setLgas([]);
     }
   }, [selectedStateId]);
 
-  const fetchStates = async () => {
-    const { data, error } = await supabase
-      .from("states")
-      .select("id, name")
-      .order("name");
-    
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to load states",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setStates(data || []);
+  const fetchStates = () => {
+    // Use hardcoded states
+    setStates(staticStates);
   };
 
-  const fetchLGAs = async (stateId: string) => {
-    console.log('Fetching LGAs for stateId:', stateId);
-    const { data, error } = await supabase
-      .from("lgas")
-      .select("id, name, state_id")
-      .eq("state_id", stateId)
-      .order("name");
-    
-    if (error) {
-      console.error('Error fetching LGAs:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load LGAs",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    console.log('LGAs fetched:', data);
-    setLgas(data || []);
+  const fetchLGAs = (stateId: string) => {
+    // Use hardcoded LGAs
+    const nextLgas = getLgasByStateId(stateId);
+    setLgas(nextLgas);
   };
 
   const fetchPositions = async () => {
@@ -410,24 +371,13 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {lgas.length > 0 ? (
-                            lgas.map((lga) => (
-                              <SelectItem key={lga.id} value={lga.id}>
-                                {lga.name}
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value="" disabled>
-                              {selectedStateId ? "No LGAs found for this state" : "Select a state first"}
+                          {lgas.map((lga) => (
+                            <SelectItem key={lga.id} value={lga.id}>
+                              {lga.name}
                             </SelectItem>
-                          )}
+                          ))}
                         </SelectContent>
                       </Select>
-                      {selectedStateId && (
-                        <div className="text-sm text-muted-foreground">
-                          {lgas.length} LGA(s) found for selected state
-                        </div>
-                      )}
                       <FormMessage />
                     </FormItem>
                   )}
