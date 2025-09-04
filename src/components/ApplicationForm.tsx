@@ -111,15 +111,90 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
     // console.log("LGAs updated:", lgas); // Removed debug log
   }, [lgas]);
 
-  const fetchStates = () => {
-    // Use hardcoded states
-    setStates(staticStates);
+  const fetchStates = async () => {
+    // Fetch real states from database to get correct UUIDs
+    const { data, error } = await supabase
+      .from("states")
+      .select("id, name")
+      .order("name");
+    
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load states",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setStates(data || []);
   };
 
   const fetchLGAs = (stateId: string) => {
-    // Use hardcoded LGAs
-    const nextLgas = getLgasByStateId(stateId);
-    setLgas(nextLgas);
+    // Find the state name from the selected state ID
+    const selectedState = states.find(state => state.id === stateId);
+    if (!selectedState) {
+      setLgas([]);
+      return;
+    }
+    
+    // Map state names to our hardcoded LGA data using numeric IDs
+    const stateNameToId: { [key: string]: string } = {
+      "Abia": "1",
+      "Adamawa": "2", 
+      "Akwa Ibom": "3",
+      "Anambra": "4",
+      "Bauchi": "5",
+      "Bayelsa": "6",
+      "Benue": "7",
+      "Borno": "8", 
+      "Cross River": "9",
+      "Delta": "10",
+      "Ebonyi": "11",
+      "Edo": "12",
+      "Ekiti": "13",
+      "Enugu": "14",
+      "Federal Capital Territory": "15",
+      "FCT": "15",
+      "Gombe": "16",
+      "Imo": "17",
+      "Jigawa": "18",
+      "Kaduna": "19",
+      "Kano": "20",
+      "Katsina": "21",
+      "Kebbi": "22",
+      "Kogi": "23",
+      "Kwara": "24",
+      "Lagos": "25",
+      "Nasarawa": "26",
+      "Niger": "27",
+      "Ogun": "28",
+      "Ondo": "29",
+      "Osun": "30",
+      "Oyo": "31",
+      "Plateau": "32",
+      "Rivers": "33",
+      "Sokoto": "34",
+      "Taraba": "35",
+      "Yobe": "36",
+      "Zamfara": "37"
+    };
+    
+    const mappedStateId = stateNameToId[selectedState.name];
+    if (!mappedStateId) {
+      setLgas([]);
+      return;
+    }
+    
+    // Get LGAs for this state and map them to use the real state UUID
+    const hardcodedLgas = getLgasByStateId(mappedStateId);
+    const mappedLgas = hardcodedLgas.map(lga => ({
+      ...lga,
+      state_id: stateId, // Use the real UUID from the database
+      id: `${stateId}-${lga.id}` // Create a unique ID combining state UUID and LGA sequence
+    }));
+    
+    setLgas(mappedLgas);
   };
 
   const fetchPositions = async () => {
@@ -166,6 +241,47 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
       // Generate application number
       const applicationNumber = `FCAT-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
 
+      // Find the selected LGA name for database insertion
+      const selectedLga = lgas.find(lga => lga.id === data.lgaId);
+      if (!selectedLga) {
+        throw new Error("Selected LGA not found");
+      }
+
+      // Create or find the LGA in the database
+      let lgaId = data.lgaId;
+      
+      // Check if this is one of our fake composite IDs (contains a dash)
+      if (data.lgaId.includes('-')) {
+        // This is a fake ID, we need to create/find the real LGA
+        const { data: existingLga, error: lgaFindError } = await supabase
+          .from("lgas")
+          .select("id")
+          .eq("name", selectedLga.name)
+          .eq("state_id", data.stateId)
+          .single();
+
+        if (existingLga) {
+          // LGA already exists, use its ID
+          lgaId = existingLga.id;
+        } else {
+          // Create new LGA
+          const { data: newLga, error: lgaCreateError } = await supabase
+            .from("lgas")
+            .insert({
+              name: selectedLga.name,
+              state_id: data.stateId
+            })
+            .select("id")
+            .single();
+
+          if (lgaCreateError) {
+            throw new Error(`Failed to create LGA: ${lgaCreateError.message}`);
+          }
+
+          lgaId = newLga.id;
+        }
+      }
+
       // Prepare application data
       const applicationData = {
         application_number: applicationNumber,
@@ -173,7 +289,7 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
         email: data.email,
         phone_number: data.phoneNumber,
         state_id: data.stateId,
-        lga_id: data.lgaId,
+        lga_id: lgaId, // Use the real or newly created LGA UUID
         date_of_birth: data.dateOfBirth,
         educational_qualifications: data.educationalQualifications as ("SSCE" | "ND" | "HND" | "BSC" | "MSC" | "PHD")[],
         class_of_degree: data.classOfDegree || {},
