@@ -97,14 +97,16 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
   }, []);
 
   useEffect(() => {
-    console.log("Selected State ID changed to:", selectedStateId);
-    if (selectedStateId) {
-      fetchLGAs(selectedStateId);
+    // Use getValues instead of watch to see if that fixes the issue
+    const currentStateId = form.getValues("stateId");
+    console.log("Current State ID from getValues:", currentStateId);
+    if (currentStateId) {
+      fetchLGAs(currentStateId);
       form.setValue("lgaId", "");
     } else {
       setLgas([]);
     }
-  }, [selectedStateId]);
+  }, [form.watch("stateId")]);
 
   useEffect(() => {
     console.log("LGAs updated:", lgas);
