@@ -106,8 +106,12 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
 
   useEffect(() => {
     if (selectedStateId) {
+      console.log('State changed to:', selectedStateId);
       fetchLGAs(selectedStateId);
       form.setValue("lgaId", "");
+    } else {
+      console.log('No state selected, clearing LGAs');
+      setLgas([]);
     }
   }, [selectedStateId]);
 
@@ -130,6 +134,7 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
   };
 
   const fetchLGAs = async (stateId: string) => {
+    console.log('Fetching LGAs for stateId:', stateId);
     const { data, error } = await supabase
       .from("lgas")
       .select("id, name, state_id")
@@ -137,6 +142,7 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
       .order("name");
     
     if (error) {
+      console.error('Error fetching LGAs:', error);
       toast({
         title: "Error",
         description: "Failed to load LGAs",
@@ -145,6 +151,7 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
       return;
     }
     
+    console.log('LGAs fetched:', data);
     setLgas(data || []);
   };
 
@@ -403,13 +410,24 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {lgas.map((lga) => (
-                            <SelectItem key={lga.id} value={lga.id}>
-                              {lga.name}
+                          {lgas.length > 0 ? (
+                            lgas.map((lga) => (
+                              <SelectItem key={lga.id} value={lga.id}>
+                                {lga.name}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="" disabled>
+                              {selectedStateId ? "No LGAs found for this state" : "Select a state first"}
                             </SelectItem>
-                          ))}
+                          )}
                         </SelectContent>
                       </Select>
+                      {selectedStateId && (
+                        <div className="text-sm text-muted-foreground">
+                          {lgas.length} LGA(s) found for selected state
+                        </div>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}
