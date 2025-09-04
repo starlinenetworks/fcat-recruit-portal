@@ -339,7 +339,10 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>State of Origin *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={(value) => {
+                        console.log("State selected:", value);
+                        field.onChange(value);
+                      }} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select your state" />
