@@ -346,7 +346,13 @@ export function ApplicationForm({ defaultPositionId }: ApplicationFormProps = {}
                       <FormLabel>State of Origin *</FormLabel>
                       <Select onValueChange={(value) => {
                         console.log("State selected:", value);
+                        console.log("Form field value before:", field.value);
                         field.onChange(value);
+                        console.log("Form field value after:", field.value);
+                        // Also set the form value directly
+                        form.setValue("stateId", value);
+                        console.log("Form setValue done, new value:", form.getValues("stateId"));
+                        console.log("All form values:", form.getValues());
                       }} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
